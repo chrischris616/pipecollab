@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Collaborative Whiteboard</title>
+    <style>
+        #whiteboard-container {
+            overflow: auto;
+            width: 800px;
+            height: 600px;
+            border: 2px solid black;
+        }
+        #whiteboard {
+            cursor: crosshair;
+        }
+    </style>
+</head>
+<body>
+    <h1>Collaborative Whiteboard</h1>
+    <div id="whiteboard-container">
+        <canvas id="whiteboard" width="800" height="600"></canvas>
+    </div>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery-mousewheel/3.1.13/jquery.mousewheel.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/hammer.js/2.0.8/hammer.min.js"></script>
+    <script>
+        const socket = io();
+        const canvas = document.getElementById('whiteboard');
+        const ctx = canvas.getContext('2d');
+        let drawing = false;
+        let scale = 1;
+        let offsetX = 0;
+        let offsetY = 0;
+
+        canvas.addEventListener('mousedown', startDrawing);
+        canvas.addEventListener('mouseup', stopDrawing);
+        canvas.addEventListener('mousemove', draw);
+
+        function startDrawing(e) {
+            drawing = true;
+            draw(e);
+        }
+
+        function stopDrawing() {
+            drawing = false;
+            ctx.beginPath();
+        }
+
+        function draw(e) {
+            if (!drawing) return;
+
+            ctx.lineWidth = 5 / scale;
+            ctx.lineCap = 'round';
+            ctx.strokeStyle = 'black';
+
+            ctx.lineTo(e.clientX - canvas.offsetLeft + offsetX, e.clientY - canvas.offsetTop + offsetY);
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.moveTo(e.clientX - canvas.offsetLeft + offsetX, e.clientY - canvas.offsetTop + offsetY);
+
+            // Send drawing data to the server
+            socket.emit('draw', {
+                x: e.clientX - canvas.offsetLeft + offsetX,
+                y: e.clientY - canvas.offsetTop + offsetY,
+                scale: scale
+            });
+        }
+
+        // Listen for drawing data from the server
+        socket.on('draw', (data) => {
+            ctx.lineWidth = 5 / data.scale;
+            ctx.lineTo(data.x, data.y);
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.moveTo(data.x, data.y);
+        });
+
+        // Handle zoom with mouse wheel
+        $(canvas).mousewheel(function(event, delta) {
+            event.preventDefault();
+            const zoomFactor = 1.1;
+            scale *= delta > 0 ? zoomFactor : 1 / zoomFactor;
+            canvas.style.transform = `scale(${scale})`;
+        });
+
+        // Handle scrollbars
+        $('#whiteboard-container').scroll(function() {
+            offsetX = $('#whiteboard-container').scrollLeft();
+            offsetY = $('#whiteboard-container').scrollTop();
+        });
+    </script>
+</body>
+</html>
